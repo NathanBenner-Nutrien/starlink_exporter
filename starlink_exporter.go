@@ -149,7 +149,9 @@ type TelemetryData struct {
 
 type ColumnsType struct {
 	UserTerminal []string `'json:"u"`
-	// ....Other column types
+	Router	   []string `'json:"r"`
+	UserTerminalDataUsage []string `'json:"d"`
+	IpAllocs	  []string `'json:"i"`
 }
 
 type TelemetryMetadata struct {
@@ -157,8 +159,8 @@ type TelemetryMetadata struct {
 }
 
 type Enumerator struct {
-	DeviceType
-	Alerts
+	DeviceType map[string]string `json:"DeviceType"`
+	Alerts map[string]string `json:"AlertsByDeviceType"`
 }
 
 // Fetch authentication token from Starlink
@@ -261,18 +263,19 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	// "DeviceType",
 	// "UtcTimestampNs",
 	// "DeviceId",
-	// ==> "WifiUptimeS",
+	// ==> "WifiUptimeS", (r)
 	// "WifiSoftwareVersion",
 	// "WifiHardwareVersion",
 	// "WifiIsRepeater",
 	// "WifiHopsFromController",
 	// "WifiIsBypassed",
-	// ==> "InternetPingDropRate",
-	// ==> "InternetPingLatencyMs",
+	// ==> "InternetPingDropRate", (u)
+	// ==> "InternetPingLatencyMs", (u)
 	// "WifiPopPingDropRate",
 	// "WifiPopPingLatencyMs",
 	// "DishPingDropRate",
 	// "DishPingLatencyMs",
+	// ==> "ActiveAlerts" (r)
 	ch <- prometheus.MustNewConstMetric(e.metrics["devicesTotal"].Desc, e.metrics["devicesTotal"].Type, float64(data.Data.Values["u"].Total))
 
 	return 1
@@ -281,7 +284,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 func main() {
 
 	var (
-		webConfig        = webflag.AddFlags(kingpin.CommandLine, ":9345")
+		webConfig        = webflag.AddFlags(kingpin.CommandLine, ":9350")
 		metricsPath      = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
 		scrapeURI        = kingpin.Flag("starlink.scrape-uri", "URI on which to scrape starlink.").Default("https://api.crowdstrike.com/api/v1/").String()
 		sslVerify        = kingpin.Flag("starlink.ssl-verify", "Flag that enables SSL certificate verification for the scrape URI").Default("true").Bool()
