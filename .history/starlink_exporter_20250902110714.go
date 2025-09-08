@@ -63,21 +63,13 @@ func newMetric(metricName string, docString string, t prometheus.ValueType, vari
 // Define metrics here
 var (
 	metrics = metricTypes{
-		"user_terminals_total":           newMetric("user_terminals_total", "Total number of user terminals.", prometheus.GaugeValue, nil, nil),
-		"routers_total":                  newMetric("routers_total", "Total number of routers.", prometheus.GaugeValue, nil, nil),
-		"ip_allocations_total":           newMetric("ip_allocations_total", "Total number of IP allocations.", prometheus.GaugeValue, nil, nil),
 		"downlink_throughput_mbps":       newMetric("downlink_throughput_mbps", "Downlink throughput in Mbps.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
 		"uplink_throughput_mbps":         newMetric("uplink_throughput_mbps", "Uplink throughput in Mbps.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"ping_drop_rate_avg":             newMetric("ping_drop_rate_avg", "Average ping drop rate.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"ping_latency_ms_avg":            newMetric("ping_latency_ms_avg", "Average ping latency in milliseconds.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"obstruction_percent_time":       newMetric("obstruction_percent_time", "Obstruction percentage time.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
+		"ping_drop_rate":                 newMetric("ping_drop_rate", "Ping drop rate.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
+		"ping_latency_ms":                newMetric("ping_latency_ms", "Ping latency in milliseconds.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
 		"uptime_seconds":                 newMetric("uptime_seconds", "Device uptime in seconds.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"signal_quality":                 newMetric("signal_quality", "Signal quality.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
 		"wifi_uptime_seconds":            newMetric("wifi_uptime_seconds", "WiFi uptime in seconds.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"internet_ping_drop_rate":        newMetric("internet_ping_drop_rate", "Internet ping drop rate.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"internet_ping_latency_ms":       newMetric("internet_ping_latency_ms", "Internet ping latency in milliseconds.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"wifi_clients_total":             newMetric("wifi_clients_total", "Total number of WiFi clients.", prometheus.GaugeValue, []string{"device_id", "device_type"}, nil),
-		"active_alerts":                  newMetric("active_alerts", "Number of active alerts.", prometheus.GaugeValue, []string{"device_id", "device_type", "alert_type"}, nil),
+		"active_alerts":                  newMetric("active_alerts", "Active alerts status.", prometheus.GaugeValue, []string{"device_id", "device_type", "alert_type"}, nil),
 	}
 
 	starlinkUp = prometheus.NewDesc(prometheus.BuildFQName("starlink", "", "up"), "Was the last scrape of starlink successful.", nil, nil)
@@ -188,39 +180,91 @@ func fetchToken(id string, secret string, sslVerify bool, proxyFromEnv bool, tim
 		Transport: tr,
 	}
 
-	requestBody := url.Values{}
-	requestBody.Set("client_id", id)
-	requestBody.Set("client_secret", secret)
-	requestBody.Set("grant_type", "client_credentials")
-	requestBody.Set("scope", "telemetry")
-
-	req, err := http.NewRequest("POST", "https://api.starlink.com/auth/connect/token", strings.NewReader(requestBody.Encode()))
-	if err != nil {
-		return "", err
+	// Try multiple possible authentication endpoints and formats
+	endpoints := []string{
+		"https://web-api.starlink.com/enterprise/oauth/token",
+		"https://web-api.starlink.com/oauth/token", 
+		"https://api.starlink.com/oauth/token",
+		"https://api.starlink.com/auth/oauth/token",
 	}
 
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	var lastErr error
 
-	response, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
+	for _, endpoint := range endpoints {
+		// Method 1: Form-encoded body
+		requestBody := url.Values{}
+		requestBody.Set("client_id", id)
+		requestBody.Set("client_secret", secret)
+		requestBody.Set("grant_type", "client_credentials")
 
-	if !(response.StatusCode >= 200 && response.StatusCode < 300) {
-		return "", fmt.Errorf("HTTP status %d", response.StatusCode)
+		req, err := http.NewRequest("POST", endpoint, strings.NewReader(requestBody.Encode()))
+		if err != nil {
+			lastErr = fmt.Errorf("error creating request for %s: %v", endpoint, err)
+			continue
+		}
+
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+		response, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("error making request to %s: %v", endpoint, err)
+			continue
+		}
+
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+
+		if response.StatusCode >= 200 && response.StatusCode < 300 {
+			var data Token
+			if err := json.Unmarshal(body, &data); err != nil {
+				lastErr = fmt.Errorf("error parsing successful response from %s: %v", endpoint, err)
+				continue
+			}
+			return data.Token, nil
+		}
+
+		// If we get 400, try JSON format
+		if response.StatusCode == 400 {
+			jsonPayload := map[string]string{
+				"client_id":     id,
+				"client_secret": secret,
+				"grant_type":    "client_credentials",
+			}
+			jsonData, _ := json.Marshal(jsonPayload)
+
+			req2, err := http.NewRequest("POST", endpoint, strings.NewReader(string(jsonData)))
+			if err != nil {
+				lastErr = fmt.Errorf("error creating JSON request for %s: %v", endpoint, err)
+				continue
+			}
+
+			req2.Header.Add("Content-Type", "application/json")
+
+			response2, err := client.Do(req2)
+			if err != nil {
+				lastErr = fmt.Errorf("error making JSON request to %s: %v", endpoint, err)
+				continue
+			}
+
+			body2, _ := io.ReadAll(response2.Body)
+			response2.Body.Close()
+
+			if response2.StatusCode >= 200 && response2.StatusCode < 300 {
+				var data Token
+				if err := json.Unmarshal(body2, &data); err != nil {
+					lastErr = fmt.Errorf("error parsing JSON response from %s: %v", endpoint, err)
+					continue
+				}
+				return data.Token, nil
+			}
+
+			lastErr = fmt.Errorf("authentication failed at %s - Status: %d, Body: %s", endpoint, response2.StatusCode, string(body2))
+		} else {
+			lastErr = fmt.Errorf("authentication failed at %s - Status: %d, Body: %s", endpoint, response.StatusCode, string(body))
+		}
 	}
 
-	var data Token
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %s", err)
-	}
-	if err := json.Unmarshal(body, &data); err != nil {
-		return "", fmt.Errorf("error parsing response: %s", err)
-	}
-
-	return data.Token, nil
+	return "", fmt.Errorf("all authentication attempts failed. Last error: %v", lastErr)
 }
 
 func parseValue(value interface{}) (float64, error) {
@@ -291,11 +335,6 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 		return 0
 	}
 
-	// Count devices by type
-	userTerminalCount := 0
-	routerCount := 0
-	ipAllocCount := 0
-
 	// Process telemetry values
 	for _, values := range data.Data.Values {
 		if len(values) == 0 {
@@ -309,20 +348,11 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 
 		switch deviceType {
 		case "u": // User Terminal
-			userTerminalCount++
 			e.processUserTerminal(ch, values, data.Data.Columns.UserTerminal, data.MetaData.Enumerators.AlertsByDeviceType["u"])
 		case "r": // Router
-			routerCount++
 			e.processRouter(ch, values, data.Data.Columns.Router, data.MetaData.Enumerators.AlertsByDeviceType["r"])
-		case "i": // IP Allocation
-			ipAllocCount++
 		}
 	}
-
-	// Export device counts
-	ch <- prometheus.MustNewConstMetric(e.metrics["user_terminals_total"].Desc, e.metrics["user_terminals_total"].Type, float64(userTerminalCount))
-	ch <- prometheus.MustNewConstMetric(e.metrics["routers_total"].Desc, e.metrics["routers_total"].Type, float64(routerCount))
-	ch <- prometheus.MustNewConstMetric(e.metrics["ip_allocations_total"].Desc, e.metrics["ip_allocations_total"].Type, float64(ipAllocCount))
 
 	return 1
 }
@@ -348,7 +378,7 @@ func (e *Exporter) processUserTerminal(ch chan<- prometheus.Metric, values []int
 		columnMap[col] = i
 	}
 
-	// Extract metrics
+	// Extract throughput metrics (speeds)
 	if idx, ok := columnMap["DownlinkThroughput"]; ok && len(values) > idx {
 		if val, err := parseValue(values[idx]); err == nil {
 			ch <- prometheus.MustNewConstMetric(e.metrics["downlink_throughput_mbps"].Desc, e.metrics["downlink_throughput_mbps"].Type, val, deviceID, deviceType)
@@ -361,33 +391,23 @@ func (e *Exporter) processUserTerminal(ch chan<- prometheus.Metric, values []int
 		}
 	}
 
+	// Extract ping metrics
 	if idx, ok := columnMap["PingDropRateAvg"]; ok && len(values) > idx {
 		if val, err := parseValue(values[idx]); err == nil {
-			ch <- prometheus.MustNewConstMetric(e.metrics["ping_drop_rate_avg"].Desc, e.metrics["ping_drop_rate_avg"].Type, val, deviceID, deviceType)
+			ch <- prometheus.MustNewConstMetric(e.metrics["ping_drop_rate"].Desc, e.metrics["ping_drop_rate"].Type, val, deviceID, deviceType)
 		}
 	}
 
 	if idx, ok := columnMap["PingLatencyMsAvg"]; ok && len(values) > idx {
 		if val, err := parseValue(values[idx]); err == nil {
-			ch <- prometheus.MustNewConstMetric(e.metrics["ping_latency_ms_avg"].Desc, e.metrics["ping_latency_ms_avg"].Type, val, deviceID, deviceType)
+			ch <- prometheus.MustNewConstMetric(e.metrics["ping_latency_ms"].Desc, e.metrics["ping_latency_ms"].Type, val, deviceID, deviceType)
 		}
 	}
 
-	if idx, ok := columnMap["ObstructionPercentTime"]; ok && len(values) > idx {
-		if val, err := parseValue(values[idx]); err == nil {
-			ch <- prometheus.MustNewConstMetric(e.metrics["obstruction_percent_time"].Desc, e.metrics["obstruction_percent_time"].Type, val, deviceID, deviceType)
-		}
-	}
-
+	// Extract uptime metric
 	if idx, ok := columnMap["Uptime"]; ok && len(values) > idx {
 		if val, err := parseValue(values[idx]); err == nil {
 			ch <- prometheus.MustNewConstMetric(e.metrics["uptime_seconds"].Desc, e.metrics["uptime_seconds"].Type, val, deviceID, deviceType)
-		}
-	}
-
-	if idx, ok := columnMap["SignalQuality"]; ok && len(values) > idx {
-		if val, err := parseValue(values[idx]); err == nil {
-			ch <- prometheus.MustNewConstMetric(e.metrics["signal_quality"].Desc, e.metrics["signal_quality"].Type, val, deviceID, deviceType)
 		}
 	}
 

@@ -259,7 +259,7 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	}
 
 	// Query the telemetry data
-	req, err := http.NewRequest("GET", "https://web-api.starlink.com/telemetry/stream/v1/telemetry", nil)
+	req, err := http.NewRequest("GET", "https://api.starlink.com/telemetry/v1/history", nil)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error creating request", "err", err)
 		return 0
