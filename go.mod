@@ -1,4 +1,4 @@
-module github.com/NathanBenner-Nutrien/crowdstrike_exporter
+module github.com/NathanBenner-Nutrien/starlink_exporter
 
 go 1.23.9
 

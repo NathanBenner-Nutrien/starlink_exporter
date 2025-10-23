@@ -17,12 +17,15 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -67,77 +70,73 @@ var (
 			"count",
 			"Total count of user terminal, router or ip allocation.",
 			prometheus.GaugeValue,
-			[]string{"type"}, nil),
-
-		"routers_total": newMetric(
-			"routers_total",
-			"Total number of routers.",
-			prometheus.GaugeValue, nil, nil),
-
-		"ip_allocations_total": newMetric(
-			"ip_allocations_total",
-			"Total number of IP allocations.",
-			prometheus.GaugeValue, nil, nil),
+			[]string{"type", "account_number"}, nil),
 
 		"downlink_throughput": newMetric(
 			"downlink_throughput",
 			"Downlink throughput in Mbps.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"uplink_throughput": newMetric(
 			"uplink_throughput",
 			"Uplink throughput in Mbps.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"ping_drop_rate": newMetric(
 			"ping_drop_rate",
 			"Average ping drop rate.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"ping_latency": newMetric(
 			"ping_latency",
 			"Average ping latency in milliseconds.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"obstruction_percent_time": newMetric(
 			"obstruction_percent_time",
 			"Obstruction percentage time.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"uptime": newMetric(
 			"uptime",
 			"Device uptime in seconds.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"signal_quality": newMetric(
 			"signal_quality",
 			"Signal quality.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"wifi_uptime": newMetric(
 			"wifi_uptime",
 			"Wifi uptime in seconds.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
 		"wifi_clients_total": newMetric(
 			"wifi_clients_total",
 			"Total number of WiFi clients.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
 
-		"active_alerts": newMetric(
-			"active_alerts",
+		"active_alert_count": newMetric(
+			"active_alert_count",
 			"Number of active alerts.",
 			prometheus.GaugeValue,
-			[]string{"device_id", "device_type", "alert_type"}, nil),
+			[]string{"device_id", "device_type", "account_number"}, nil),
+
+		"alert": newMetric(
+			"alert",
+			"Starlink alert.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "alert_type"}, nil),
 	}
 
 	starlinkUp = prometheus.NewDesc(prometheus.BuildFQName("starlink", "", "up"), "Was the last scrape of starlink successful.", nil, nil)
@@ -146,32 +145,32 @@ var (
 // Exporter collects stats from the given URI and exports them using
 // the prometheus metrics package.
 type Exporter struct {
-	URI           string
-	authUri       string
-	id            string
-	secret        string
-	accountNumber string
-	sslVerify     bool
-	proxyFromEnv  bool
-	timeout       time.Duration
-	mutex         sync.RWMutex
-	up            prometheus.Gauge
-	totalScrapes  prometheus.Counter
-	metrics       metricTypes
-	logger        log.Logger
+	URI            string
+	authUri        string
+	id             string
+	secret         string
+	accountNumbers []string
+	sslVerify      bool
+	proxyFromEnv   bool
+	timeout        time.Duration
+	mutex          sync.RWMutex
+	up             prometheus.Gauge
+	totalScrapes   prometheus.Counter
+	metrics        metricTypes
+	logger         log.Logger
 }
 
 // NewExporter returns an initialized Exporter.
-func NewExporter(uri string, authUri string, id string, secret string, accountNumber string, sslVerify bool, proxyFromEnv bool, timeout time.Duration, logger log.Logger) (*Exporter, error) {
+func NewExporter(uri string, authUri string, id string, secret string, accountNumbers string, sslVerify bool, proxyFromEnv bool, timeout time.Duration, logger log.Logger) (*Exporter, error) {
 	return &Exporter{
-		URI:           uri,
-		authUri:       authUri,
-		id:            id,
-		secret:        secret,
-		accountNumber: accountNumber,
-		sslVerify:     sslVerify,
-		proxyFromEnv:  proxyFromEnv,
-		timeout:       timeout,
+		URI:            uri,
+		authUri:        authUri,
+		id:             id,
+		secret:         secret,
+		accountNumbers: strings.Split(accountNumbers, ","),
+		sslVerify:      sslVerify,
+		proxyFromEnv:   proxyFromEnv,
+		timeout:        timeout,
 		up: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: "starlink",
 			Name:      "up",
@@ -249,10 +248,11 @@ func (e *Exporter) fetchToken() (string, error) {
 		Transport: tr,
 	}
 
-	requestBody := url.Values{}
-	requestBody.Set("client_id", e.id)
-	requestBody.Set("client_secret", e.secret)
-	requestBody.Set("grant_type", "client_credentials")
+	requestBody := url.Values{
+		"client_id":     {e.id},
+		"client_secret": {e.secret},
+		"grant_type":    {"client_credentials"},
+	}
 
 	req, err := http.NewRequest("POST", e.authUri, strings.NewReader(requestBody.Encode()))
 	if err != nil {
@@ -262,6 +262,7 @@ func (e *Exporter) fetchToken() (string, error) {
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	response, err := client.Do(req)
+
 	if err != nil {
 		return "", err
 	}
@@ -283,13 +284,11 @@ func (e *Exporter) fetchToken() (string, error) {
 	return data.Token, nil
 }
 
-func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
-	e.totalScrapes.Inc()
-
-	token, err := e.fetchToken()
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error fetching token", "err", err)
-		return 0
+func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, accountNumber string) (map[string]int, error) {
+	totalObjects := map[string]int{
+		"user_terminal": 0,
+		"router":        0,
+		"ip_allocation": 0,
 	}
 
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !e.sslVerify}}
@@ -301,16 +300,17 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 		Transport: tr,
 	}
 
-	requestBody := TelemetryRequestBody{AccountNumber: e.accountNumber}
+	requestBody := TelemetryRequestBody{AccountNumber: accountNumber}
 	jsonRequestBody, err := json.Marshal(requestBody)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error marshalling JSON %v", err)
+		return totalObjects, errors.New("error fetching telemetry")
 	}
 
 	req, err := http.NewRequest("POST", e.URI, bytes.NewBuffer(jsonRequestBody))
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error creating request", "err", err)
-		return 0
+		return totalObjects, errors.New("error fetching telemetry")
 	}
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
@@ -320,29 +320,25 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 	response, err := client.Do(req)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error fetching telemetry", "err", err)
-		return 0
+		return totalObjects, errors.New("error fetching telemetry")
 	}
 	defer response.Body.Close()
 
 	if !(response.StatusCode >= 200 && response.StatusCode < 300) {
 		level.Error(e.logger).Log("msg", "Error fetching telemetry", "status", response.StatusCode)
-		return 0
+		return totalObjects, errors.New("error fetching telemetry")
 	}
 
 	var telemetryResponse TelemetryResponse
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error reading response body", "err", err)
-		return 0
+		return totalObjects, errors.New("error fetching telemetry")
 	}
 	if err := json.Unmarshal(body, &telemetryResponse); err != nil {
 		level.Error(e.logger).Log("msg", "Error unmarshaling response body", "err", err)
-		return 0
+		return totalObjects, errors.New("error fetching telemetry")
 	}
-
-	userTerminalCount := 0
-	routerCount := 0
-	ipAllocCount := 0
 
 	processedDevices := make(map[string]bool)
 
@@ -352,7 +348,6 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 		}
 
 		deviceType := values[0].(string)
-
 		metrics := mapMetrics(values, telemetryResponse.Data.Columns[deviceType])
 
 		switch deviceType {
@@ -368,48 +363,63 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 				processedDevices[deviceID] = true
 			}
 
-			userTerminalCount++
+			totalObjects["user_terminal"]++
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["downlink_throughput"].Desc,
 				e.metrics["downlink_throughput"].Type,
-				metrics["DownlinkThroughput"].(float64), deviceID, deviceType)
+				metrics["DownlinkThroughput"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["uplink_throughput"].Desc,
 				e.metrics["uplink_throughput"].Type,
-				metrics["UplinkThroughput"].(float64), deviceID, deviceType)
+				metrics["UplinkThroughput"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["ping_drop_rate"].Desc,
 				e.metrics["ping_drop_rate"].Type,
-				metrics["PingDropRateAvg"].(float64), deviceID, deviceType)
+				metrics["PingDropRateAvg"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["ping_latency"].Desc,
 				e.metrics["ping_latency"].Type,
-				metrics["PingLatencyMsAvg"].(float64), deviceID, deviceType)
+				metrics["PingLatencyMsAvg"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["obstruction_percent_time"].Desc,
 				e.metrics["obstruction_percent_time"].Type,
-				metrics["ObstructionPercentTime"].(float64), deviceID, deviceType)
+				metrics["ObstructionPercentTime"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["uptime"].Desc,
 				e.metrics["uptime"].Type,
-				metrics["Uptime"].(float64), deviceID, deviceType)
+				metrics["Uptime"].(float64), deviceID, deviceType, accountNumber)
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["signal_quality"].Desc,
 				e.metrics["signal_quality"].Type,
-				metrics["SignalQuality"].(float64), deviceID, deviceType)
+				metrics["SignalQuality"].(float64), deviceID, deviceType, accountNumber)
 
-			// alertCount := len(metrics["ActiveAlerts"].([]string))
-			// alerts := metrics["ActiveAlerts"].([]string)
-			// for _, alert := range alerts {
-			// 	// Handle alerts
-			// }
+			alerts := alertsToStrings(metrics["ActiveAlerts"].([]any))
+			for _, alertType := range telemetryResponse.MetaData.Enumerators.AlertEnumerators["u"] {
+				var metric float64
+				alertTypeActive := slices.Contains(alerts, alertType)
+				if alertTypeActive {
+					metric = 1
+				} else {
+					metric = 0
+				}
+				ch <- prometheus.MustNewConstMetric(
+					e.metrics["alert"].Desc,
+					e.metrics["alert"].Type,
+					metric, deviceID, deviceType, accountNumber, alertType)
+			}
+
+			alertCount := len(alerts)
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["active_alert_count"].Desc,
+				e.metrics["active_alert_count"].Type,
+				float64(alertCount), deviceID, deviceType, accountNumber)
 
 		case "r": // Router
 			deviceType := "router"
@@ -423,12 +433,12 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 				processedDevices[deviceID] = true
 			}
 
-			routerCount++
+			totalObjects["router"]++
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["wifi_uptime"].Desc,
 				e.metrics["wifi_uptime"].Type,
-				metrics["WifiUptimeS"].(float64), deviceID, deviceType)
+				metrics["WifiUptimeS"].(float64), deviceID, deviceType, accountNumber)
 
 			// ch <- prometheus.MustNewConstMetric(
 			// 	e.metrics["ping_drop_rate"].Desc,
@@ -440,36 +450,111 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
 			// 	e.metrics["ping_latency"].Type,
 			// 	metrics["InternetPingLatencyMs"].(float64), deviceID, deviceType)
 
+			alerts := alertsToStrings(metrics["ActiveAlerts"].([]any))
+			for _, alertType := range telemetryResponse.MetaData.Enumerators.AlertEnumerators["r"] {
+				var metric float64
+				alertTypeActive := slices.Contains(alerts, alertType)
+				if alertTypeActive {
+					metric = 1
+				} else {
+					metric = 0
+				}
+				ch <- prometheus.MustNewConstMetric(
+					e.metrics["alert"].Desc,
+					e.metrics["alert"].Type,
+					metric, deviceID, deviceType, accountNumber, alertType)
+			}
+
+			alertCount := len(alerts)
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["alert_count"].Desc,
+				e.metrics["alert_count"].Type,
+				float64(alertCount), deviceID, deviceType, accountNumber)
+
 		case "i": // IP Allocation
-			ipAllocCount++
+			totalObjects["ip_allocation"]++
 		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(
 		e.metrics["count"].Desc,
 		e.metrics["count"].Type,
-		float64(userTerminalCount), "user_terminal")
+		float64(totalObjects["user_terminal"]), "user_terminal", accountNumber)
 
 	ch <- prometheus.MustNewConstMetric(
 		e.metrics["count"].Desc,
 		e.metrics["count"].Type,
-		float64(routerCount), "router")
+		float64(totalObjects["router"]), "router", accountNumber)
 
 	ch <- prometheus.MustNewConstMetric(
 		e.metrics["count"].Desc,
 		e.metrics["count"].Type,
-		float64(ipAllocCount), "ip_allocation")
+		float64(totalObjects["ip_allocation"]), "ip_allocation", accountNumber)
+
+	return totalObjects, nil
+}
+
+func (e *Exporter) scrape(ch chan<- prometheus.Metric) (up float64) {
+	e.totalScrapes.Inc()
+
+	token, err := e.fetchToken()
+	if err != nil {
+		level.Error(e.logger).Log("msg", "Error fetching token", "err", err)
+		return 0
+	}
+
+	objectTotalAllAccounts := map[string]int{
+		"user_terminal": 0,
+		"router":        0,
+		"ip_allocation": 0,
+	}
+
+	for _, accountNumber := range e.accountNumbers {
+		objectTotal, err := e.gatherMetrics(ch, token, accountNumber)
+		if err != nil {
+			level.Error(e.logger).Log("msg", "Error gathering metrics", "err", err)
+			return 0
+		}
+
+		objectTotalAllAccounts["user_terminal"] += objectTotal["user_terminal"]
+		objectTotalAllAccounts["router"] += objectTotal["router"]
+		objectTotalAllAccounts["ip_allocation"] += objectTotal["ip_allocation"]
+	}
+
+	ch <- prometheus.MustNewConstMetric(
+		e.metrics["count"].Desc,
+		e.metrics["count"].Type,
+		float64(objectTotalAllAccounts["user_terminal"]), "user_terminal", "all")
+
+	ch <- prometheus.MustNewConstMetric(
+		e.metrics["count"].Desc,
+		e.metrics["count"].Type,
+		float64(objectTotalAllAccounts["router"]), "router", "all")
+
+	ch <- prometheus.MustNewConstMetric(
+		e.metrics["count"].Desc,
+		e.metrics["count"].Type,
+		float64(objectTotalAllAccounts["ip_allocation"]), "ip_allocation", "all")
 
 	return 1
 }
 
 // Maps metric names to values
-func mapMetrics(values []any, metricEnum []string) (metrics map[string]any) {
+func mapMetrics(values []any, metricEnum []string) map[string]any {
 	metricMap := make(map[string]any)
 	for i := range metricEnum {
 		metricMap[metricEnum[i]] = values[i]
 	}
 	return metricMap
+}
+
+func alertsToStrings(alerts []any) []string {
+	alertStrings := make([]string, 0, len(alerts))
+	for _, item := range alerts {
+		value := strconv.FormatFloat(item.(float64), 'f', -1, 64)
+		alertStrings = append(alertStrings, value)
+	}
+	return alertStrings
 }
 
 func main() {
@@ -483,7 +568,7 @@ func main() {
 		httpProxyFromEnv = kingpin.Flag("http.proxy-from-env", "Flag that enables using HTTP proxy settings from environment variables ($http_proxy, $https_proxy, $no_proxy)").Default("false").Bool()
 		clientID         = kingpin.Flag("starlink.client-id", "Client ID for starlink API.").Required().String()
 		clientSecret     = kingpin.Flag("starlink.client-secret", "Client secret for the starlink API.").Required().String()
-		accountNumber    = kingpin.Flag("starlink.account-number", "Account number for the starlink API.").Required().String()
+		accountNumbers   = kingpin.Flag("starlink.account-number", "Account number for the starlink API.").Required().String()
 	)
 
 	promlogConfig := &promlog.Config{}
@@ -496,7 +581,7 @@ func main() {
 	level.Info(logger).Log("msg", "Starting starlink_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "context", version.BuildContext())
 
-	exporter, err := NewExporter(*scrapeURI, *authURI, *clientID, *clientSecret, *accountNumber, *sslVerify, *httpProxyFromEnv, *timeout, logger)
+	exporter, err := NewExporter(*scrapeURI, *authURI, *clientID, *clientSecret, *accountNumbers, *sslVerify, *httpProxyFromEnv, *timeout, logger)
 	if err != nil {
 		level.Error(logger).Log("msg", "Error creating an exporter", "err", err)
 		os.Exit(1)
