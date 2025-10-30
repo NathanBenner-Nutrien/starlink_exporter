@@ -376,7 +376,7 @@ func (e *Exporter) fetchTelemetry(token string, accountNumber string) (Telemetry
 	return telemetryResponse, nil
 }
 
-func (e *Exporter) fetchServiceLines(token string, accountNumber string) (ServiceLineResponse, error) {
+func (e *Exporter) fetchServiceLines(token string, accountNumber string, page int) (ServiceLineResponse, error) {
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !e.sslVerify}}
 	if e.proxyFromEnv {
 		tr.Proxy = http.ProxyFromEnvironment
@@ -386,9 +386,9 @@ func (e *Exporter) fetchServiceLines(token string, accountNumber string) (Servic
 		Transport: tr,
 	}
 
-	// level.Info(e.logger).Log("msg", "Fetching service lines", "uri", e.URI+"/enterprise/v1/account/"+accountNumber+"/service-lines?limit=200")
+	// level.Info(e.logger).Log("msg", "Fetching service lines", "uri", e.URI+"/enterprise/v1/account/"+accountNumber+"/service-lines?page="+strconv.Itoa(page))
 
-	req, err := http.NewRequest("GET", e.URI+"/enterprise/v1/account/"+accountNumber+"/service-lines?limit=200", nil)
+	req, err := http.NewRequest("GET", e.URI+"/enterprise/v1/account/"+accountNumber+"/service-lines?page="+strconv.Itoa(page), nil)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error creating request", "err", err)
 		return ServiceLineResponse{}, errors.New("error fetching service lines")
@@ -424,7 +424,7 @@ func (e *Exporter) fetchServiceLines(token string, accountNumber string) (Servic
 	return serviceLinesResponse, nil
 }
 
-func (e *Exporter) fetchUserTerminals(token string, accountNumber string) (UserTerminalResponse, error) {
+func (e *Exporter) fetchUserTerminals(token string, accountNumber string, page int) (UserTerminalResponse, error) {
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !e.sslVerify}}
 	if e.proxyFromEnv {
 		tr.Proxy = http.ProxyFromEnvironment
@@ -434,9 +434,9 @@ func (e *Exporter) fetchUserTerminals(token string, accountNumber string) (UserT
 		Transport: tr,
 	}
 
-	// level.Info(e.logger).Log("msg", "Fetching user terminals", "uri", e.URI+"/enterprise/v1/account/"+accountNumber+"/user-terminals?limit=200")
+	// level.Info(e.logger).Log("msg", "Fetching user terminals", "uri", e.URI+"/enterprise/v1/account/"+accountNumber+"/user-terminals?page="+strconv.Itoa(page))
 
-	req, err := http.NewRequest("GET", e.URI+"/enterprise/v1/account/"+accountNumber+"/user-terminals?limit=200", nil)
+	req, err := http.NewRequest("GET", e.URI+"/enterprise/v1/account/"+accountNumber+"/user-terminals?page="+strconv.Itoa(page), nil)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error creating request", "err", err)
 		return UserTerminalResponse{}, errors.New("error fetching user terminals")
@@ -479,21 +479,37 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 		"ip_allocation": 0,
 	}
 
-	serviceLineResponse, err := e.fetchServiceLines(token, accountNumber)
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error fetching service lines", "error", err)
-		return totalObjects, errors.New("error fetching service lines")
+	serviceLines := make([]ServiceLine, 0)
+	for i := range 10 {
+		serviceLineResponse, err := e.fetchServiceLines(token, accountNumber, i)
+		if err != nil {
+			level.Error(e.logger).Log("msg", "Error fetching service lines", "error", err)
+			return totalObjects, errors.New("error fetching service lines")
+		}
+		serviceLines = append(serviceLines, serviceLineResponse.Content.Results...)
+		if len(serviceLines) >= serviceLineResponse.Content.TotalCount {
+			totalObjects["service_line"] = serviceLineResponse.Content.TotalCount
+			break
+		}
+		// level.Info(e.logger).Log("msg", "Fetching new page of service accounts", "current length", len(serviceLines), "total count", serviceLineResponse.Content.TotalCount)
 	}
-	totalObjects["service_line"] = serviceLineResponse.Content.TotalCount
 
-	userTerminalResponse, err := e.fetchUserTerminals(token, accountNumber)
-	if err != nil {
-		level.Error(e.logger).Log("msg", "Error fetching user terminals", "error", err)
-		return totalObjects, errors.New("error fetching user terminals")
+	userTerminals := make([]UserTerminal, 0)
+	for i := range 10 {
+		userTerminalResponse, err := e.fetchUserTerminals(token, accountNumber, i)
+		if err != nil {
+			level.Error(e.logger).Log("msg", "Error fetching user terminals", "error", err)
+			return totalObjects, errors.New("error fetching user terminals")
+		}
+		userTerminals = append(userTerminals, userTerminalResponse.Content.Results...)
+		if len(userTerminals) >= userTerminalResponse.Content.TotalCount {
+			totalObjects["user_terminal"] = userTerminalResponse.Content.TotalCount
+			break
+		}
+		// level.Info(e.logger).Log("msg", "Fetching new page of user terminals", "current length", len(userTerminals), "total count", userTerminalResponse.Content.TotalCount)
 	}
-	totalObjects["user_terminal"] = userTerminalResponse.Content.TotalCount
 
-	userTerminalNameMap := mapUserTerminalNames(serviceLineResponse.Content.Results, userTerminalResponse.Content.Results)
+	userTerminalNameMap := mapUserTerminalNames(serviceLines, userTerminals)
 
 	// Retry fetching telemetry until valid data is returned
 	var telemetryResponse TelemetryResponse
