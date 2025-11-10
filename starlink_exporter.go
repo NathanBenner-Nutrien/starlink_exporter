@@ -72,6 +72,8 @@ var (
 			prometheus.GaugeValue,
 			[]string{"type", "account_number"}, nil),
 
+		// User Terminal Metrics
+
 		"downlink_throughput": newMetric(
 			"downlink_throughput",
 			"Downlink throughput in Mbps.",
@@ -102,17 +104,13 @@ var (
 			prometheus.GaugeValue,
 			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
 
-		"uptime": newMetric(
-			"uptime",
-			"Device uptime in seconds.",
-			prometheus.GaugeValue,
-			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
-
 		"signal_quality": newMetric(
 			"signal_quality",
 			"Signal quality.",
 			prometheus.GaugeValue,
 			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		// Router metrics
 
 		"wifi_uptime": newMetric(
 			"wifi_uptime",
@@ -123,6 +121,142 @@ var (
 		"wifi_clients_total": newMetric(
 			"wifi_clients_total",
 			"Total number of WiFi clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "connection"}, nil),
+
+		"wifi_is_repeater": newMetric(
+			"wifi_is_repeater",
+			"Router is in repeater mode.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wifi_hops_from_controller": newMetric(
+			"wifi_hops_from_controller",
+			"Router mesh hops from controller. 0 means router is directly connected to Starlink user terminal. -1 means invalid.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wifi_is_bypassed": newMetric(
+			"wifi_is_bypassed",
+			"Router wifi is bypassed.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"internet_ping_drop_rate": newMetric(
+			"internet_ping_drop_rate",
+			"Approximate packet loss. Pings are lower priority than other traffic so this may overestimate packet loss if the network is congested.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"internet_ping_latency": newMetric(
+			"internet_ping_latency",
+			"Average latency from the Starlink router to the internet.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wifi_pop_ping_drop_rate": newMetric(
+			"wifi_pop_ping_drop_rate",
+			"Approximate packet loss to the Starlink point of presence.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wifi_pop_ping_latency": newMetric(
+			"wifi_pop_ping_latency",
+			"Approximate latency from the Starlink router to the Starlink point of presence.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"dish_ping_drop_rate": newMetric(
+			"dish_ping_drop_rate",
+			"Approximate packet loss to Starlink user terminal.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"dish_ping_latency": newMetric(
+			"dish_ping_latency",
+			"Approximate latency from the Starlink router to the Starlink user terminal.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wan_rx": newMetric(
+			"wan_rx",
+			"Downlink usage in bytes.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wan_tx": newMetric(
+			"wan_tx",
+			"Uplink usage in bytes.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
+
+		"wifi_clients_rx_rate_min": newMetric(
+			"wifi_clients_rx_rate_min",
+			"Minimum receive rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_tx_rate_min": newMetric(
+			"wifi_clients_tx_rate_min",
+			"Minimum transfer rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_rx_rate_max": newMetric(
+			"wifi_clients_rx_rate_max",
+			"Maximum receive rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_tx_rate_max": newMetric(
+			"wifi_clients_tx_rate_max",
+			"Maximum transfer rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_rx_rate_avg": newMetric(
+			"wifi_clients_rx_rate_avg",
+			"Average receive rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_tx_rate_avg": newMetric(
+			"wifi_clients_tx_rate_avg",
+			"Average transfer rate of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_signal_strength_min": newMetric(
+			"wifi_clients_signal_strength_min",
+			"Minimum signal strength of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_signal_strength_max": newMetric(
+			"wifi_clients_signal_strength_max",
+			"Maximum signal strength of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		"wifi_clients_signal_strength_avg": newMetric(
+			"wifi_clients_signal_strength_avg",
+			"Average signal strength of clients.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "signal_band"}, nil),
+
+		// IP allocation metrics
+
+		"ip_allocation": newMetric(
+			"ip_allocation",
+			"IP allocation information.",
+			prometheus.GaugeValue,
+			[]string{"device_id", "device_type", "account_number", "site_name", "ipv4", "ipv6Ue", "ipv6Cpe"}, nil),
+
+		// Metrics common to user terminals and routers
+
+		"uptime": newMetric(
+			"uptime",
+			"Device uptime in seconds.",
 			prometheus.GaugeValue,
 			[]string{"device_id", "device_type", "account_number", "site_name"}, nil),
 
@@ -255,6 +389,7 @@ type ServiceLine struct {
 	AddressReferenceID string `json:"addressReferenceId"`
 	ServiceLineNumber  string `json:"serviceLineNumber"`
 	Nickname           string `json:"nickname"`
+	Active             bool   `json:"active"`
 }
 
 type UserTerminalResponse struct {
@@ -333,7 +468,7 @@ func (e *Exporter) fetchTelemetry(token string, accountNumber string) (Telemetry
 
 	// level.Info(e.logger).Log("msg", "Fetching telemetry", "uri", e.URI+"/telemetry/stream/v1/telemetry", "account number", accountNumber)
 
-	requestBody := TelemetryRequestBody{AccountNumber: accountNumber, BatchSize: 1000, MaxLingerMs: 5000}
+	requestBody := TelemetryRequestBody{AccountNumber: accountNumber, BatchSize: 2000, MaxLingerMs: 5000}
 	jsonRequestBody, err := json.Marshal(requestBody)
 	if err != nil {
 		level.Error(e.logger).Log("msg", "Error marshalling JSON %v", err)
@@ -472,6 +607,13 @@ func (e *Exporter) fetchUserTerminals(token string, accountNumber string, page i
 }
 
 func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, accountNumber string) (map[string]int, error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			level.Error(e.logger).Log("msg", "Recovered from panic:", r)
+		}
+	}()
+
 	totalObjects := map[string]int{
 		"service_line":  0,
 		"user_terminal": 0,
@@ -479,6 +621,7 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 		"ip_allocation": 0,
 	}
 
+	// Collect service lines from management API
 	serviceLines := make([]ServiceLine, 0)
 	for i := range 10 {
 		serviceLineResponse, err := e.fetchServiceLines(token, accountNumber, i)
@@ -491,9 +634,16 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 			totalObjects["service_line"] = serviceLineResponse.Content.TotalCount
 			break
 		}
-		// level.Info(e.logger).Log("msg", "Fetching new page of service accounts", "current length", len(serviceLines), "total count", serviceLineResponse.Content.TotalCount)
 	}
 
+	// Count active service lines
+	for _, sl := range serviceLines {
+		if sl.Active {
+			totalObjects["service_line"]++
+		}
+	}
+
+	// Collect user terminals from management API
 	userTerminals := make([]UserTerminal, 0)
 	for i := range 10 {
 		userTerminalResponse, err := e.fetchUserTerminals(token, accountNumber, i)
@@ -503,12 +653,19 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 		}
 		userTerminals = append(userTerminals, userTerminalResponse.Content.Results...)
 		if len(userTerminals) >= userTerminalResponse.Content.TotalCount {
-			totalObjects["user_terminal"] = userTerminalResponse.Content.TotalCount
 			break
 		}
-		// level.Info(e.logger).Log("msg", "Fetching new page of user terminals", "current length", len(userTerminals), "total count", userTerminalResponse.Content.TotalCount)
 	}
 
+	// Count active user terminals
+	for _, ut := range userTerminals {
+		if ut.Active {
+			totalObjects["user_terminal"]++
+		}
+	}
+
+	// Create a map of user terminals to service lines for associating site names
+	// Site names are configured with the nickname field on service lines
 	userTerminalNameMap := mapUserTerminalNames(serviceLines, userTerminals)
 
 	// Retry fetching telemetry until valid data is returned
@@ -538,7 +695,7 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 		metrics := mapMetrics(values, telemetryResponse.Data.Columns[deviceType])
 
 		switch deviceType {
-		case "u": // User Terminal
+		case "u":
 			deviceType := "user_terminal"
 			deviceID := metrics["DeviceId"].(string)
 			siteName := userTerminalNameMap[deviceID]
@@ -551,8 +708,6 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 			} else {
 				processedDevices[deviceID] = true
 			}
-
-			// totalObjects["user_terminal"]++
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["downlink_throughput"].Desc,
@@ -593,7 +748,7 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 
 			for alertID, alertType := range telemetryResponse.MetaData.Enumerators.AlertEnumerators["u"] {
 				var metric float64
-				if slices.Contains(alerts, "ut"+alertID) {
+				if slices.Contains(alerts, alertID) {
 					metric = 1.0
 				} else {
 					metric = 0.0
@@ -609,9 +764,11 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 				e.metrics["active_alert_count"].Type,
 				float64(len(alerts)), deviceID, deviceType, accountNumber, siteName)
 
-		case "r": // Router
+		case "r":
 			deviceType := "router"
 			deviceID := metrics["DeviceId"].(string)
+			userTerminal := metrics["DishId"].(string)
+			siteName := userTerminalNameMap[userTerminal]
 
 			// Handle duplicate device IDs
 			_, keyExists := processedDevices[deviceID]
@@ -621,46 +778,247 @@ func (e *Exporter) gatherMetrics(ch chan<- prometheus.Metric, token string, acco
 				processedDevices[deviceID] = true
 			}
 
-			totalObjects["router"]++
+			// totalObjects["router"]++
 
 			ch <- prometheus.MustNewConstMetric(
 				e.metrics["wifi_uptime"].Desc,
 				e.metrics["wifi_uptime"].Type,
-				metrics["WifiUptimeS"].(float64), deviceID, deviceType, accountNumber, "")
+				metrics["WifiUptimeS"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_clients_total"].Desc,
+				e.metrics["wifi_clients_total"].Type,
+				metrics["Clients"].(float64), deviceID, deviceType, accountNumber, siteName, "all")
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_clients_total"].Desc,
+				e.metrics["wifi_clients_total"].Type,
+				metrics["Clients2Ghz"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_clients_total"].Desc,
+				e.metrics["wifi_clients_total"].Type,
+				metrics["Clients5Ghz"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_clients_total"].Desc,
+				e.metrics["wifi_clients_total"].Type,
+				metrics["ClientsEth"].(float64), deviceID, deviceType, accountNumber, siteName, "eth")
+
+			isRepeater := 0
+			if metrics["WifiIsRepeater"].(bool) {
+				isRepeater = 1
+			}
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_is_repeater"].Desc,
+				e.metrics["wifi_is_repeater"].Type,
+				float64(isRepeater), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_hops_from_controller"].Desc,
+				e.metrics["wifi_hops_from_controller"].Type,
+				metrics["WifiHopsFromController"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			isBypassed := 0
+			if metrics["WifiIsBypassed"].(bool) {
+				isBypassed = 1
+			}
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_is_bypassed"].Desc,
+				e.metrics["wifi_is_bypassed"].Type,
+				float64(isBypassed), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["internet_ping_drop_rate"].Desc,
+				e.metrics["internet_ping_drop_rate"].Type,
+				metrics["InternetPingDropRate"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["internet_ping_latency"].Desc,
+				e.metrics["internet_ping_latency"].Type,
+				metrics["InternetPingLatencyMs"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_pop_ping_drop_rate"].Desc,
+				e.metrics["wifi_pop_ping_drop_rate"].Type,
+				metrics["WifiPopPingDropRate"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wifi_pop_ping_latency"].Desc,
+				e.metrics["wifi_pop_ping_latency"].Type,
+				metrics["WifiPopPingLatencyMs"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["dish_ping_drop_rate"].Desc,
+				e.metrics["dish_ping_drop_rate"].Type,
+				metrics["DishPingDropRate"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["dish_ping_latency"].Desc,
+				e.metrics["dish_ping_latency"].Type,
+				metrics["DishPingLatencyMs"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wan_rx"].Desc,
+				e.metrics["wan_rx"].Type,
+				metrics["WanRxBytes"].(float64), deviceID, deviceType, accountNumber, siteName)
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["wan_tx"].Desc,
+				e.metrics["wan_tx"].Type,
+				metrics["WanTxBytes"].(float64), deviceID, deviceType, accountNumber, siteName)
 
 			// ch <- prometheus.MustNewConstMetric(
-			// 	e.metrics["ping_drop_rate"].Desc,
-			// 	e.metrics["ping_drop_rate"].Type,
-			// 	metrics["InternetPingDropRate"].(float64), deviceID, deviceType)
+			// 	e.metrics["wifi_clients_rx_rate_min"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_min"].Type,
+			// 	metrics["Clients2GhzRxRateMbpsMin"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
 
 			// ch <- prometheus.MustNewConstMetric(
-			// 	e.metrics["ping_latency"].Desc,
-			// 	e.metrics["ping_latency"].Type,
-			// 	metrics["InternetPingLatencyMs"].(float64), deviceID, deviceType)
+			// 	e.metrics["wifi_clients_rx_rate_min"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_min"].Type,
+			// 	metrics["Clients5GhzRxRateMbpsMin"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
 
-			// alerts := alertsToStrings(metrics["ActiveAlerts"].([]any))
-			// level.Info(e.logger).Log("alerts", strings.Join(alerts, " "))
-			// for _, alertType := range telemetryResponse.MetaData.Enumerators.AlertEnumerators["r"] {
-			// 	var metric float64
-			// 	if slices.Contains(alerts, alertType) {
-			// 		metric = 1.0
-			// 	} else {
-			// 		metric = 0.0
-			// 	}
-			// 	ch <- prometheus.MustNewConstMetric(
-			// 		e.metrics["alert"].Desc,
-			// 		e.metrics["alert"].Type,
-			// 		metric, deviceID, deviceType, accountNumber, alertType)
-			// }
-
-			// alertCount := len(alerts)
 			// ch <- prometheus.MustNewConstMetric(
-			// 	e.metrics["active_alert_count"].Desc,
-			// 	e.metrics["active_alert_count"].Type,
-			// 	float64(alertCount), deviceID, deviceType, accountNumber)
+			// 	e.metrics["wifi_clients_tx_rate_min"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_min"].Type,
+			// 	metrics["Clients2GhzTxRateMbpsMin"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
 
-		case "i": // IP Allocation
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_tx_rate_min"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_min"].Type,
+			// 	metrics["Clients5GhzTxRateMbpsMin"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_rx_rate_max"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_max"].Type,
+			// 	metrics["Clients2GhzRxRateMbpsMax"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_rx_rate_max"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_max"].Type,
+			// 	metrics["Clients5GhzRxRateMbpsMax"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_tx_rate_max"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_max"].Type,
+			// 	metrics["Clients2GhzTxRateMbpsMax"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_tx_rate_max"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_max"].Type,
+			// 	metrics["Clients5GhzTxRateMbpsMax"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_rx_rate_avg"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_avg"].Type,
+			// 	metrics["Clients2GhzRxRateMbpsAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_rx_rate_avg"].Desc,
+			// 	e.metrics["wifi_clients_rx_rate_avg"].Type,
+			// 	metrics["Clients5GhzRxRateMbpsAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_tx_rate_avg"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_avg"].Type,
+			// 	metrics["Clients2GhzTxRateMbpsAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_tx_rate_avg"].Desc,
+			// 	e.metrics["wifi_clients_tx_rate_avg"].Type,
+			// 	metrics["Clients5GhzTxRateMbpsAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_min"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_min"].Type,
+			// 	metrics["Clients2GhzSignalStrengthMin"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_min"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_min"].Type,
+			// 	metrics["Clients5GhzSignalStrengthMin"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_max"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_max"].Type,
+			// 	metrics["Clients2GhzSignalStrengthMax"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_max"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_max"].Type,
+			// 	metrics["Clients5GhzSignalStrengthMax"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_avg"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_avg"].Type,
+			// 	metrics["Clients2GhzSignalStrengthAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "2GHz")
+
+			// ch <- prometheus.MustNewConstMetric(
+			// 	e.metrics["wifi_clients_signal_strength_avg"].Desc,
+			// 	e.metrics["wifi_clients_signal_strength_avg"].Type,
+			// 	metrics["Clients5GhzSignalStrengthAvg"].(float64), deviceID, deviceType, accountNumber, siteName, "5GHz")
+
+			alerts := alertsToStrings(metrics["ActiveAlerts"].([]any))
+			for alertID, alertType := range telemetryResponse.MetaData.Enumerators.AlertEnumerators["r"] {
+				var metric float64
+				if slices.Contains(alerts, alertID) {
+					metric = 1.0
+				} else {
+					metric = 0.0
+				}
+				ch <- prometheus.MustNewConstMetric(
+					e.metrics["alert"].Desc,
+					e.metrics["alert"].Type,
+					metric, deviceID, deviceType, accountNumber, siteName, alertType)
+			}
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["active_alert_count"].Desc,
+				e.metrics["active_alert_count"].Type,
+				float64(len(alerts)), deviceID, deviceType, accountNumber, siteName)
+
+		case "i":
+			deviceType := "ip_allocation"
+			deviceID := metrics["DeviceId"].(string)
+			userTerminal := strings.TrimPrefix(deviceID, "ip-")
+			siteName := userTerminalNameMap[userTerminal]
+
+			// Handle duplicate device IDs
+			_, keyExists := processedDevices[deviceID]
+			if keyExists {
+				continue
+			} else {
+				processedDevices[deviceID] = true
+			}
+
 			totalObjects["ip_allocation"]++
+
+			ipv4 := metrics["Ipv4"].([]any)
+
+			ipv4_addr := ""
+			if len(ipv4) > 0 {
+				ipv4_addr = ipv4[0].(string)
+			}
+
+			ipv6Ue := metrics["Ipv6Ue"].([]any)
+			ipv6Ue_addr := ""
+			if len(ipv6Ue) > 0 {
+				ipv6Ue_addr = ipv6Ue[0].(string)
+			}
+
+			ipv6Cpe := metrics["Ipv6Cpe"].([]any)
+			ipv6Cpe_addr := ""
+			if len(ipv6Cpe) > 0 {
+				ipv6Cpe_addr = ipv6Cpe[0].(string)
+			}
+
+			ch <- prometheus.MustNewConstMetric(
+				e.metrics["ip_allocation"].Desc,
+				e.metrics["ip_allocation"].Type,
+				1.0, deviceID, deviceType, accountNumber, siteName,
+				ipv4_addr, ipv6Ue_addr, ipv6Cpe_addr)
 		}
 	}
 
@@ -736,15 +1094,17 @@ func mapMetrics(values []any, metricEnum []string) map[string]any {
 	return metricMap
 }
 
+// Convert alert ids to descriptive names
 func alertsToStrings(alerts []any) []string {
 	alertStrings := make([]string, len(alerts))
 	for _, item := range alerts {
 		value := strconv.FormatFloat(item.(float64), 'f', -1, 64)
-		alertStrings = append(alertStrings, "ut"+value)
+		alertStrings = append(alertStrings, value)
 	}
 	return alertStrings
 }
 
+// Map user terminals to site names obtained from service lines nickname field
 func mapUserTerminalNames(serviceLines []ServiceLine, userTerminals []UserTerminal) map[string]string {
 	serviceLineMap := make(map[string]string)
 	userTerminalMap := make(map[string]string)
